@@ -1,0 +1,154 @@
+"""
+Source: http://nbviewer.jupyter.org/gist/dopplershift/356f2e14832e9b676207
+"""
+
+
+from siphon.radarserver import RadarServer
+from datetime import datetime,timedelta
+import cartopy
+import matplotlib
+import numpy as np
+from siphon.cdmr import Dataset
+import warnings
+warnings.filterwarnings("ignore", category=matplotlib.cbook.MatplotlibDeprecationWarning)
+from metpy.plots import ctables  # For NWS colortable
+import matplotlib.pyplot as plt
+import pyart
+from dateutil import tz
+import numpy.ma as ma
+import time
+from time import mktime
+import pyproj
+
+
+
+ref_norm, ref_cmap = ctables.registry.get_with_steps('NWSReflectivity', 5, 5)
+
+rs=RadarServer('http://thredds-aws.unidata.ucar.edu/thredds/radarServer/nexrad/level2/S3/')
+
+query=rs.query()
+dt=datetime(2017, 6, 1, 16)
+query.stations('KDOX').time_range(dt,dt+timedelta(minutes=15))
+
+cat = rs.get_catalog(query)
+ds = list(cat.datasets.values())[0]
+
+
+"""
+From James:
+https://github.com/jsimkins2/UD_SRS/blob/master/goesR/nexrad_kdox.py
+"""
+loc = pyart.io.nexrad_common.get_nexrad_location('KDOX')
+lon0 = loc[1] ; lat0 = loc[0]
+
+radar = pyart.io.read_nexrad_cdm(ds.access_urls['OPENDAP'])
+
+# create timestamp
+timestamp = radar.time['units'].split(' ')[-1].split('T')
+timestamp = timestamp[0] + ' ' + timestamp[1][:-1]
+timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+from_zone = tz.gettz('UTC')
+to_zone = tz.gettz('America/New_York')
+utc = timestamp.replace(tzinfo=from_zone)
+local = utc.astimezone(to_zone)
+lt = time.localtime()
+dst = lt.tm_isdst
+lt = time.localtime()
+dst = lt.tm_isdst
+if dst == 0:
+    et = "EDT"
+else:
+    et = "EST"
+    
+# Grid data into geographic coordinates
+display = pyart.graph.RadarMapDisplay(radar)
+x,y = display._get_x_y(0,True,None)
+x = x*1000; y = y*1000
+lambert_aea = {'proj': 'laea',
+          'lat_0':lat0, 
+          'lon_0':lon0, 
+          'x_0':0., 
+          'y_0':0.,
+          'ellps': 'WGS84',
+          'datum': 'WGS84',
+          'R':6378137.0}
+lons, lats = pyart.core.cartesian_to_geographic(x,y,
+    projparams = lambert_aea)
+    
+
+# Reflectivity
+ref = radar.get_field(0, 'reflectivity')
+# unmasked = ma.getdata(ref)    
+# lats = lats[0:720, 0:1832]
+# lons = lons[0:720, 0:1832]
+# lats = np.where(lats<41.0 && lats>37.5)
+# lons = np.clip(lons, -73.5, -76.0)
+
+
+# x, y, _ = radar.get_gate_x_y_z(0)
+# grid = togrid(ref, x, y, gridsize=256, lim=250)
+# dBZ = np.ma.masked_where(clutter, ref)
+
+#Define transect lines
+translat=[[np.linspace(39.15,   39.15, num=200)],
+          [39.125,  39.125],
+          [39.1,    39.1],
+          [39.075,  39.075],
+          [39.05,   39.05],
+          [39.025,  39.025],
+          [39.0,    39.0],
+          [38.975,  38.975],
+          [38.95,   38.95],
+          [38.925,  38.925],
+          [38.9,    38.9],
+          [38.875,  38.875],
+          [38.85,   38.85],
+          [38.825,  38.825],
+          [38.8,    38.8],
+          [38.775,  38.775],
+          [38.75,   38.75],#Begin ocean transects
+          [38.725,  38.725],
+          [38.7,    38.7],
+          [38.675,  38.675],
+          [38.65,   38.65],
+          [38.625,  38.625],
+          [38.6,    38.6],
+          [38.575,  38.575],
+          [38.55,   38.55],
+          [38.525,  38.525],
+          [38.5,    38.5],
+          [38.475,  38.475],
+          [38.45,   38.45],
+          ]
+translon=[[-75.25,      -76.0],
+          [-75.2375,    -76.0],
+          [-75.225,     -76.0],
+          [-75.2125,    -76.0],
+          [-75.2,       -76.0],
+          [-75.1875,    -76.0],
+          [-75.175,     -76.0],
+          [-75.1625,    -76.0],
+          [-75.15,      -76.0],
+          [-75.1375,    -76.0],
+          [-75.125,     -76.0],
+          [-75.1125,    -76.0],
+          [-75.1,       -76.0],
+          [-75.0875,    -76.0],
+          [-75.075,     -76.0],
+          [-75.0625,    -76.0],
+          [-75.05,      -76.0],
+          [-74.7,       -76.0],#Begin ocean transects
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          [-74.7,       -76.0],
+          ]
+

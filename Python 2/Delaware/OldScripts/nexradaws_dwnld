@@ -1,0 +1,22 @@
+import nexradaws
+from datetime import datetime, timedelta
+import pyart
+import tempfile
+import pytz
+
+templocation = tempfile.mkdtemp()
+
+conn=nexradaws.NexradAwsInterface()
+
+eastern_timezone = pytz.timezone('US/Eastern')
+radar_id = 'KDOX'
+start = eastern_timezone.localize(datetime(2017,5,1,0,0))
+end = eastern_timezone.localize (datetime(2017,5,1,0,59))
+scans = conn.get_avail_scans_in_range(start, end, radar_id)
+#print("There are {} scans available between {} and {}\n".format(len(scans), start, end))
+
+results=conn.download(scans, templocation)
+for scan in results.iter_success():
+    radardat=scan.open_pyart()
+    outputpath='/home/work/geog.rauscher/DATA/NEXRAD/2017/'
+    pyart.io.write_cfradial(filename=outputpath+scan.filename+".nc",radar=radardat)

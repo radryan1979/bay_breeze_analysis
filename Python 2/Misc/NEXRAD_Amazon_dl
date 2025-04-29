@@ -1,0 +1,14 @@
+from siphon.radarserver import RadarServer
+from datetime import datetime,timedelta
+
+rs=RadarServer('http://thredds-aws.unidata.ucar.edu/thredds/radarServer/nexrad/level2/S3/')
+
+#!cd /home/work/geog.rauscher/DATA/NEXRAD/
+!cd /users/dpmoore2927/Desktop/
+
+query=rs.query()
+dt=datetime(2017, 5, 1)
+query.stations('KDOX').time_range(dt,dt+timedelta(months=5))
+
+cat = rs.get_catalog(query)
+cat.datasets

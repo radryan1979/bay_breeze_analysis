@@ -1,0 +1,85 @@
+"""
+The Purpose of this code is to ingest 10 years of Buoy SST
+data and create a 'climate normal' that can be used to 
+normalize individual days to characterize hot/cold/normal
+SST days on each coast.
+
+Created by Dan Moore
+Updated: 2/26/19
+"""
+
+
+import numpy as np
+import pandas as pd
+import os.path
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+
+buoy = "MLRF1"
+BUOYpath = "/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/{0}_Data/{0}_08_18_COMBINED.csv".format(buoy)
+
+
+SST_df = pd.read_csv(BUOYpath,header=0, skiprows=[1],index_col=0)
+SST_df = SST_df.reset_index(drop=True)
+SST_df = SST_df.replace(999,np.NaN)
+SST_df['Datetime'] = pd.to_datetime(SST_df['#YY'].apply(str) + '-' + SST_df['MM'].apply(str) + '-' + SST_df["DD"].apply(str) + " " +\
+                        SST_df['hh'].apply(str) + ':' + SST_df['mm'].apply(str))
+SST_df = SST_df.set_index('Datetime')
+
+
+clim_daily = SST_df.groupby(SST_df.index.strftime("%m%d")).mean()
+clim_daily["2008"] = "2008" # Year with extra day so all dates are accounted for - otherwise arbitrary
+clim_daily['Datetime'] = pd.to_datetime(clim_daily["2008"].apply(str) + '-' + \
+                        clim_daily['MM'].apply(int).apply(str) + '-' + clim_daily["DD"].apply(int).apply(str))
+clim_daily = clim_daily.set_index('Datetime')
+SST_normal = clim_daily["WTMP"]
+
+
+
+
+
+
+#Create monthly mask for study period
+mask = (SST_normal.index.month >= 4) & (SST_normal.index.month <= 10)
+
+
+#Create mask for non-NAN values
+y_mask = np.isfinite(SST_normal.loc[mask])
+y = SST_normal.loc[mask].loc[y_mask]
+
+
+
+#Create polyfit
+x = mdates.date2num(SST_normal[mask][y_mask].index.tolist())
+
+z4 = np.polyfit(x, y, 3) #last number is degree of fit
+p4 = np.poly1d(z4) 
+
+xx = np.linspace(x.min(), x.max(), len(x))
+dd = mdates.num2date(xx)
+
+
+#Normalized
+#ax = plt.subplot(111)
+#normalized = y-p4(xx)
+#ax.plot(normalized)
+#plt.title("Normalized SST 2008-2018 Buoy {0}".format(buoy))
+#plt.ylabel("SST (degC)")
+#plt.xlabel("Month")
+myFmt = mdates.DateFormatter('%b')
+#ax.xaxis.set_major_formatter(myFmt)
+#plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyClimatologies/Buoy{0}DeTrended.png".format(buoy),dpi=500)
+#
+
+
+#PLOT
+ax = plt.subplot(111)
+plt.plot(SST_normal.loc[mask].index,SST_normal.loc[mask], linewidth=0.35, linestyle='-', color='b', label="Daily Mean")
+plt.plot(dd,p4(xx),'-r',label="3rd Order Regression")
+plt.legend()
+plt.ylabel("Surface Water Temperature (\N{DEGREE SIGN}C)")
+plt.xlabel("Month")
+plt.title("Buoy {0} 11yr Climatology (2008-2018)".format(buoy))
+ax.xaxis.set_major_formatter(myFmt)
+plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyClimatologies/Buoy{0}Climatology.png".format(buoy),dpi=500)

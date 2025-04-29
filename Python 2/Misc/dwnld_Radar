@@ -1,0 +1,48 @@
+import urllib3
+import pyart
+import tarfile
+import glob
+
+!cd /Volumes/Lacie/SeaBreeze/Delaware/KDOXRadarDataRaw/2017/
+
+http = urllib3.PoolManager()
+urllib3.disable_warnings()
+
+fileprefix="https://www1.ncdc.noaa.gov/pub/has/HAS011168598/NWS_NEXRAD_NXL2DPBL_KDOX_"
+
+for mo in range(9,10):
+    for day in range(1,32):
+        if (mo==6 or mo==9) and day==31:
+            continue
+        for hr in range(0,24):
+        
+            filesuffix="2017{:02d}{:02d}{:02d}0000_2017{:02d}{:02d}{:02d}5959".format(mo,day,hr,mo,day,hr)
+            
+            url = fileprefix+filesuffix+".tar"
+            r=http.request('GET',url)
+            with open(filesuffix+".tar", 'wb') as fout:
+                fout.write(r.data)
+            
+            try:
+                tar = tarfile.open(filesuffix+".tar")
+                tar.extractall()
+                tar.close()
+            except:
+                pass
+            
+            path = '/Volumes/LaCie/SeaBreeze/Delaware/KDOXRadarDataRaw/2017/*V06.ar2v'   
+            files=glob.glob(path)   
+            for file in files: 
+                filestring=str(file)
+                outputfile=filestring[56:75]
+                try:
+                    radardat=pyart.io.read_nexrad_archive(file)
+                    outpath="/Volumes/LaCie/SeaBreeze/Delaware/KDOXRadarData/2017/"
+                    pyart.io.write_cfradial(filename=outpath+outputfile+".nc",radar=radardat)
+                except:
+                    pass
+            
+            !rm *.ar2v
+        
+        !rm *.tar
+                

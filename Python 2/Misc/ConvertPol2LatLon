@@ -1,0 +1,21 @@
+import numpy as np
+import os
+import warnings
+from netCDF4 import Dataset
+import pyart
+import pyproj
+import basemap
+warnings.filterwarnings('ignore')
+
+filename = '/Users/dpmoore2927/Downloads/KDOX20170505_061537.nc'
+
+radardat=pyart.io.read(filename)
+
+az=radardat.azimuth["data"]
+rg=radardat.range["data"]
+el=radardat.eleveation["data"]
+
+x,y,z=pyart.core.antenna_vectors_to_cartesian(rg,az,el)
+
+wgs84=pyproj.Proj("+init=EPSG:4326")
+lon,lat=pyart.core.cartesian_to_geographic(x,y,wgs84)

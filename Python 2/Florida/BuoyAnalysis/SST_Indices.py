@@ -1,0 +1,385 @@
+"""
+The Purpose of this code is to ingest 10 years of Buoy SST
+data and create a 'climate normal' that can be used to 
+normalize individual days to characterize hot/cold/normal
+SST days on each coast.
+
+We will then output a characterized list of dates. If 
+the daily average is 1 degree more (less) than the climate normal
+for that month/day, it will be characterized as a hot (cold)
+day.
+
+Best fit sine curves found through excel.
+theta = ((mo-1)*(daysofmonth)*24 + (day-1)*24 + hr) /365/24 * 2*pi
+
+
+EAST COAST:
+FWYF1: SST=3.37189783447613*sin(theta + 3.97992525748718)+26.4272749209742
+Test = MLRF1 else FWYF1
+or 41009 else 41113
+
+
+MLRF1: SST=3.26755526135028*np.sin(theta[i] + 3.96591605245333)+26.7557134978416
+
+41113: SST=4.53363808433518*np.sin(theta[i] + 4.05704890182212)+23.9573202070085
+
+41009: SST=3.48480018114684*np.sin(theta[i] + 3.80984646166589)+25.5135620014415
+
+WEST COAST:
+Climate = 42013: SST = 6.23305124367247*np.sin(theta[i] + 4.0776979321921)+24.694120839877
+Test = 42013 else 42022
+
+Update 5/24/19: Update to analyze 2 and 3 standard deviations.
+
+Created by Dan Moore
+Updated: 5/24/19
+"""
+
+
+import numpy as np
+import pandas as pd
+import os.path
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from scipy import stats
+
+clim_buoy = "MLRF1"
+test_buoy = "MLRF1"
+backup_test_buoy = "FWYF1"
+climpath = "/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/{0}_Data/{0}_08_18_COMBINED.csv".format(clim_buoy)
+testpath = "/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/{0}_Data/{0}_08_18_COMBINED.csv".format(test_buoy)
+backuptestpath = "/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/{0}_Data/{0}_08_18_COMBINED.csv".format(backup_test_buoy)
+
+
+SST_df = pd.read_csv(climpath,header=0, skiprows=[1],index_col=0)
+SST_df = SST_df.reset_index(drop=True)
+SST_df = SST_df.replace(999,np.NaN)
+SST_df['Datetime'] = pd.to_datetime(SST_df['#YY'].apply(str) + '-' + SST_df['MM'].apply(str) + '-' + SST_df["DD"].apply(str) + " " +\
+                        SST_df['hh'].apply(str) + ':' + SST_df['mm'].apply(str))
+SST_df = SST_df.set_index('Datetime')
+
+
+clim_daily = SST_df.groupby(SST_df.index.strftime("%m%d")).mean()
+clim_daily["2008"] = "2008" # Year with extra day so all dates are accounted for - otherwise arbitrary
+clim_daily['Datetime'] = pd.to_datetime(clim_daily["2008"].apply(str) + '-' + \
+                        clim_daily['MM'].apply(int).apply(str) + '-' + clim_daily["DD"].apply(int).apply(str))
+clim_daily = clim_daily.set_index('Datetime')
+SST_normal = clim_daily["WTMP"]
+
+
+
+
+
+
+
+# #Create monthly mask for study period
+mask = (SST_normal.index.month >= 4) & (SST_normal.index.month <= 10)
+
+#Create mask for non-NAN values
+y_mask = np.isfinite(SST_normal.loc[mask])
+y = SST_normal.loc[mask].loc[y_mask]
+
+y = y.groupby(y.index.strftime("%m%d")).mean()
+# y = y.groupby(y.index.date).mean()
+
+
+
+# #Create polyfit
+# x = mdates.date2num(SST_normal[mask][y_mask].index.tolist())
+
+# z4 = np.polyfit(x, y, 3) #last number is degree of fit
+# p4 = np.poly1d(z4) 
+
+# xx = np.linspace(x.min(), x.max(), len(x))
+# dd = mdates.num2date(xx)
+
+
+# #Normalized
+# ax = plt.subplot(111)
+# normalized = y-p4(xx)
+# ax.plot(normalized)
+# plt.title("Normalized SST 2008-2017 Buoy {0}".format(buoy))
+# plt.ylabel("SST (degC)")
+# plt.xlabel("Month")
+# myFmt = mdates.DateFormatter('%b')
+# ax.xaxis.set_major_formatter(myFmt)
+# plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyClimatologies/Buoy{0}DeTrended.png".format(buoy),dpi=500)
+# plt.show()
+
+
+
+
+# #PLOT
+# ax = plt.subplot(111)
+# plt.plot(SST_normal.loc[mask].index,SST_normal.loc[mask], linewidth=0.35, linestyle='-', color='b', label="Daily Mean")
+# plt.plot(dd,p4(xx),'-r',label="3rd Order Trendline")
+# plt.legend()
+# plt.ylabel("SST (deg C)")
+# plt.title("Buoy {0} 10yr Climatology (2008-2017)".format(buoy))
+# ax.xaxis.set_major_formatter(myFmt)
+# plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyClimatologies/Buoy{0}Climatology.png".format(buoy),dpi=500)
+
+
+
+
+
+#Setup Test dataframes
+test_df = pd.read_csv(testpath,header=0, skiprows=[1],index_col=0)
+test_df = test_df.reset_index(drop=True)
+test_df = test_df.replace(999,np.NaN)
+test_df['Datetime'] = pd.to_datetime(test_df['#YY'].apply(str) + '-' + test_df['MM'].apply(str) + '-' + test_df["DD"].apply(str) + " " +\
+                        test_df['hh'].apply(str) + ':' + test_df['mm'].apply(str))
+test_df = test_df.set_index('Datetime')
+
+backup_df = pd.read_csv(backuptestpath,header=0, skiprows=[1],index_col=0)
+backup_df = backup_df.reset_index(drop=True)
+backup_df = backup_df.replace(999,np.NaN)
+backup_df['Datetime'] = pd.to_datetime(backup_df['#YY'].apply(str) + '-' + backup_df['MM'].apply(str) + '-' + backup_df["DD"].apply(str) + " " +\
+                        backup_df['hh'].apply(str) + ':' + backup_df['mm'].apply(str))
+backup_df = backup_df.set_index('Datetime')
+
+
+totalSST1 = []
+totalSST2 = []
+
+#Loop years and create indices
+for yr in range(2008,2019):
+    t1 = test_df[test_df["#YY"]==yr]
+    t1 = t1.groupby(t1.index.strftime("%m%d")).mean()
+    # t1[str(yr)] = str(yr) 
+    # t1['Datetime'] = pd.to_datetime(t1["{0}".format(yr)].apply(str) + '-' + \
+    #                         t1['MM'].apply(int).apply(str) + '-' + t1["DD"].apply(int).apply(str))
+    # t1 = t1.set_index('Datetime')
+    t1 = t1.reindex(y.index)
+    t1_SST = t1["WTMP"]
+    
+    t2 = backup_df[backup_df["#YY"]==yr]
+    t2 = t2.groupby(t2.index.strftime("%m%d")).mean()
+    # t2[str(yr)] = str(yr) 
+    # t2['Datetime'] = pd.to_datetime(t2["{0}".format(yr)].apply(str) + '-' + \
+    #                         t2['MM'].apply(int).apply(str) + '-' + t2["DD"].apply(int).apply(str))
+    # t2 = t2.set_index('Datetime')
+    t2 = t2.reindex(y.index)
+    t2_SST = t2["WTMP"]
+    
+    
+    
+    
+    
+    
+    
+    
+    # #Test correlation between test and backup
+    mask1 = (np.isfinite(t1_SST) & np.isfinite(t2_SST))
+    xi = t1_SST[mask1]
+    y1 = t2_SST[mask1]
+    
+    totalSST1 = np.append(totalSST1,xi)
+    totalSST2 = np.append(totalSST2,y1)
+    
+    # if np.any(mask1):
+    
+    #     slope, intercept, r_value, p_value, std_err = stats.linregress(xi,y1)
+    #     line = slope*xi+intercept
+        
+    #     plt.plot(xi,y1,'o')
+    #     plt.plot(xi,xi, 'k-')
+    #     plt.title("{0} Regression for test and backup N={1} r^2={2}".format(yr,len(t1_SST),r_value**2))
+    #     plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyComparisonFigures/{0}vs{1}Direct_{2}.png".format(test_buoy,backup_test_buoy,yr), dpi=500)
+    #     plt.show()
+    
+    # #Comparing the two buoys
+    # compare = pd.DataFrame({ "{0}SST".format(test_buoy):   t1_SST.values,
+    #                             "{0}SST".format(backup_test_buoy) :   t2_SST.values,
+                                
+    #                         },index=pd.to_datetime(t1_SST.index+str(yr),format="%m%d%Y", errors="coerce"))
+    
+    # plt.plot(compare["{0}SST".format(test_buoy)], 'b-',label=test_buoy)
+    # plt.plot(compare["{0}SST".format(backup_test_buoy)], 'r-', label=backup_test_buoy)
+    # plt.title("Daily SST {0}".format(yr))
+    # plt.legend()
+    # plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyComparisonFigures/{0}vs{1}SST_{2}.png".format(test_buoy,backup_test_buoy,yr), dpi=500)
+    # plt.show()
+    
+    
+    
+    
+    
+
+    #Replace nan values with backup values.
+    t1_SST[np.isnan(t1_SST)] = t2_SST
+    
+    #Calculate, theta and modeled SST
+    if yr == 2008 or yr == 2012 or yr == 2016:
+        modays = [31,29,31,30,31,30,31,31,30,31,30,31]
+    else:
+        modays = [31,28,31,30,31,30,31,31,30,31,30,31]
+    yrdays = sum(modays)
+    theta = np.empty(len(t1_SST))
+    modSST = np.empty(len(t1_SST))
+    for i in range(len(t1_SST.index)):
+        day = int(t1_SST.index[i][2:])
+        mo = int(t1_SST.index[i][:2])
+        theta[i] = ((sum(modays[:mo-1])+day-1)*24.0)/(yrdays*24.0) * 2.0*np.pi
+        if clim_buoy == "FWYF1":
+            modSST[i] = 3.37189783447613*np.sin(theta[i] + 3.97992525748718)+26.4272749209742 #FWYF1
+        elif clim_buoy == "42013":
+            modSST[i] = 6.23305124367247*np.sin(theta[i] + 4.0776979321921)+24.694120839877 #42013
+        elif clim_buoy == "MLRF1":
+            modSST[i] = 3.26755526135028*np.sin(theta[i] + 3.96591605245333)+26.7557134978416 #MLRF1
+        elif clim_buoy == "41113":
+            modSST[i] = 4.53363808433518*np.sin(theta[i] + 4.05704890182212)+23.9573202070085 #41113
+        elif clim_buoy == "41009":
+            modSST[i] = 3.48480018114684*np.sin(theta[i] + 3.80984646166589)+25.5135620014415 #41009
+
+    norm = t1_SST.values - modSST
+    
+    #Set indices:
+    SST_index = ["" for x in range(len(t1_SST))]
+    for i in range(len(t1_SST.index)):
+        if norm[i]>0.75:
+            SST_index[i] = "Positive"
+        elif norm[i]<-0.75:
+            SST_index[i] = "Negative"
+        elif np.isnan(norm[i]):
+            SST_index[i] = "NaN"
+        else:
+            SST_index[i] = "None"
+        
+    normalized = pd.DataFrame({ "ObsSST":   t1_SST.values,
+                                "Theta" :   theta,
+                                "ModeledSST": modSST,
+                                "Normalization": norm
+                                # "Index": SST_index
+    },index=pd.to_datetime(t1_SST.index+str(yr),format="%m%d%Y", errors="coerce"))
+    
+    #Create monthly mask for study period
+    mask = (normalized.index.month >= 4) & (normalized.index.month <= 10)
+    #Create mask for non-NAN values
+    # y_mask = np.isfinite(normalized.loc[mask])
+    # y = normalized.loc[y_mask]
+    
+    normalized = normalized.loc[mask]
+    
+    if yr==2008:
+        final_df = normalized.copy()
+    else:
+        final_df = final_df.append(normalized)
+    
+    pos_index = normalized.copy()
+    neg_index = normalized.copy()
+    
+    pos_index[pos_index["Normalization"]<0.75] = np.nan
+    neg_index[neg_index["Normalization"]>-0.75] = np.nan
+    
+    # ax = plt.subplot(111)
+    # ax.plot(normalized["Normalization"], color='k')
+    # ax.plot(pos_index["Normalization"], color='r')
+    # ax.plot(neg_index["Normalization"], color='b')
+    # plt.title("SST Index {0}-Climatology Buoy {1}".format(yr,test_buoy))
+    # plt.ylabel("SST (degC)")
+    # plt.xlabel("Month")
+    # myFmt = mdates.DateFormatter('%b')
+    # ax.xaxis.set_major_formatter(myFmt)
+    # # plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/SST_Indices/Buoy{0}DeTrended_wIndex{1}.png".format(clim_buoy,yr),dpi=500)
+    # plt.show()
+
+
+#Test overall correlation between test and backup
+t1 = test_df.copy()
+t1 = t1.groupby(t1.index.date).mean()
+# t1 = t1.reindex(y.index)
+t1_SST = t1["WTMP"]
+
+
+t2 = backup_df.copy()
+t2 = t2.groupby(t2.index.date).mean()
+t2 = t2.reindex(t1_SST.index)
+t2_SST = t2["WTMP"]
+
+mask1 = (np.isfinite(t1_SST) & np.isfinite(t2_SST))
+xi = t1_SST[mask1]
+y1 = t2_SST[mask1]
+
+# totalSST1 = np.append(totalSST1,xi)
+# y1 = np.append(y1,y1)
+
+if np.any(mask1):
+
+    slope, intercept, r_value, p_value, std_err = stats.linregress(xi,y1)
+    line = slope*xi+intercept
+    
+    # plt.plot(xi,y1,'o')
+    # plt.title("Correlation between {0} and {1} \n N={2} $r^2$={3}".format(test_buoy,backup_test_buoy,len(xi),round(r_value**2,3)))
+    # plt.ylabel("{0} SWT (\N{DEGREE SIGN}C)".format(backup_test_buoy))
+    # plt.xlabel("{0} SWT (\N{DEGREE SIGN}C)".format(test_buoy))
+    # plt.xlim(round(min((np.min(xi),np.min(y1)))-0.5,0), round(max((np.max(xi),np.max(y1)))+0.5,0))
+    # plt.ylim(round(min((np.min(xi),np.min(y1)))-0.5,0), round(max((np.max(xi),np.max(y1)))+0.5,0))
+    # plt.plot([round(min((np.min(xi),np.min(y1)))-0.5,0),round(max((np.max(xi),np.max(y1)))+0.5,0)],\
+    #     [round(min((np.min(xi),np.min(y1)))-0.5,0),round(max((np.max(xi),np.max(y1)))+0.5,0)], 'k-')
+    # plt.xticks(np.arange(round(min((np.min(xi),np.min(y1))),0),round(max((np.max(xi),np.max(y1))),0)+1,2))
+    # plt.yticks(np.arange(round(min((np.min(xi),np.min(y1))),0),round(max((np.max(xi),np.max(y1))),0)+1,2))
+    # plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyComparisonFigures/{0}vs{1}Direct.png".format(test_buoy,backup_test_buoy), dpi=500)
+    # plt.show()
+
+# #Comparing the two buoys
+# compare = pd.DataFrame({ "{0}SST".format(test_buoy):   t1_SST.values,
+#                             "{0}SST".format(backup_test_buoy) :   t2_SST.values,
+                            
+#                         },index=pd.to_datetime(t1_SST.index+str(yr),format="%m%d%Y", errors="coerce"))
+
+# plt.plot(compare["{0}SST".format(test_buoy)], 'b-',label=test_buoy)
+# plt.plot(compare["{0}SST".format(backup_test_buoy)], 'r-', label=backup_test_buoy)
+# plt.title("Daily SST")
+# plt.legend()
+# plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/BuoyComparisonFigures/{0}vs{1}SST.png".format(test_buoy,backup_test_buoy), dpi=500)
+# plt.show()
+
+
+
+
+# #Normalizing dates so each dataframe has same dates:
+full_dates = pd.date_range("01 April 2008","October 31 2018", freq="D")
+dates_mask = (full_dates.month>=4) & (full_dates.month<=10)
+full_dates=full_dates[dates_mask]
+
+final_df=final_df.reindex(full_dates)
+
+
+#Establishing the actual index. For m
+x=final_df["Normalization"].dropna()
+stdev=np.std(x)
+mean=np.mean(x)
+final_df.loc[final_df["Normalization"]>(mean+stdev),"1STD"]="Positive"
+final_df.loc[final_df["Normalization"]<(mean-stdev),"1STD"]="Negative"
+final_df.loc[(final_df["Normalization"]<=(mean+stdev)) & (final_df["Normalization"]>=(mean-stdev)),"1STD"]="None"
+final_df.loc[final_df["Normalization"]>(mean+2*stdev),"2STD"]="Positive"
+final_df.loc[final_df["Normalization"]<(mean-2*stdev),"2STD"]="Negative"
+final_df.loc[(final_df["Normalization"]<=(mean+2*stdev)) & (final_df["Normalization"]>=(mean-2*stdev)),"2STD"]="None"
+final_df.loc[final_df["Normalization"]>(mean+3*stdev),"3STD"]="Positive"
+final_df.loc[final_df["Normalization"]<(mean-3*stdev),"3STD"]="Negative"
+final_df.loc[(final_df["Normalization"]<=(mean+3*stdev)) & (final_df["Normalization"]>=(mean-3*stdev)),"3STD"]="None"
+        
+#Plot detrended SST with 1, 2, 3 std as lines
+x=final_df[np.isfinite(final_df["Normalization"])]["Normalization"].values
+bins = np.linspace(np.floor(np.nanmin(x)),np.ceil(np.nanmax(x)), 30)
+plt.hist(x,bins,alpha=1)
+plt.xlabel('SST Deviation from Mean [\N{DEGREE SIGN}C]')
+plt.ylabel('Frequency')
+plt.title('Florida Buoy {0}'.format(clim_buoy))
+plt.axvline(x=stdev,c='k')
+plt.axvline(x=-stdev,c='k')
+plt.axvline(x=2*stdev,c='k')
+plt.axvline(x=-2*stdev,c='k')
+plt.axvline(x=3*stdev,c='k')
+plt.axvline(x=-3*stdev,c='k')
+plt.text(-3.1, 200, u'\u03bc=%(mu)2.2f\N{DEGREE SIGN}C, \nstd=%(std)2.2f\N{DEGREE SIGN}C' %\
+         {'mu':final_df[np.isfinite(final_df["Normalization"])]["Normalization"].mean(),\
+         'std':final_df[np.isfinite(final_df["Normalization"])]["Normalization"].std()})
+plt.savefig("/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/SST_Indices/DetrendedHisto_Wstd_{0}.png".format(clim_buoy),dpi=500)
+# plt.show()
+
+
+# final_df.to_csv('/Volumes/LaCie/SeaBreeze/Florida/NDBC_Buoy/SST_Indices/{0}_SST_Index_2STD.csv'.format(clim_buoy))
+
+
